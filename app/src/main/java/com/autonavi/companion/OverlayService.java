@@ -298,13 +298,17 @@ public class OverlayService extends Service {
     private void startScreenCapture() {
         try {
             Intent intent = new Intent(this, ScreenCaptureService.class);
-            intent.setAction(ScreenCaptureService.ACTION_CAPTURE_STARTED);
+            intent.setAction("START_IF_AUTHORIZED");
+            int displayId = MainActivity.getClusterDisplayId(this);
+            if (displayId >= 0) {
+                intent.putExtra("display_id", displayId);
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(intent);
             } else {
                 startService(intent);
             }
-            Log.d(TAG, "ScreenCaptureService started via log monitor");
+            Log.d(TAG, "ScreenCaptureService start requested via log monitor, display_id=" + displayId);
         } catch (Exception e) {
             Log.e(TAG, "startScreenCapture failed", e);
         }
@@ -312,9 +316,7 @@ public class OverlayService extends Service {
 
     private void stopScreenCapture() {
         try {
-            Intent intent = new Intent(this, ScreenCaptureService.class);
-            intent.setAction(ScreenCaptureService.ACTION_CAPTURE_STOPPED);
-            startService(intent);
+            stopService(new Intent(this, ScreenCaptureService.class));
             Log.d(TAG, "ScreenCaptureService stopped via log monitor");
         } catch (Exception e) {
             Log.e(TAG, "stopScreenCapture failed", e);

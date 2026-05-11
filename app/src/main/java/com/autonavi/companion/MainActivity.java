@@ -12,6 +12,7 @@ import android.hardware.display.DisplayManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -28,6 +29,7 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 
 public class MainActivity extends Activity {
+    private static final String TAG = "AmapCompanion";
     static final String PREFS = "amap_companion";
     static final String KEY_TARGET_PACKAGE = "target_package";
     static final String KEY_UPDATE_URL = "update_url";
@@ -65,6 +68,8 @@ public class MainActivity extends Activity {
     static final String KEY_SCREEN_CAPTURE_Y = "screen_capture_y";
     static final String KEY_SCREEN_CAPTURE_SCALE = "screen_capture_scale";
     static final String KEY_SCREEN_CAPTURE_QUALITY = "screen_capture_quality";
+    static final int REQUEST_CODE_SCREEN_CAPTURE = 1001;
+    static final int REQUEST_CODE_OVERLAY_PERMISSION = 1002;
     static final String ACTION_MAIN_OVERLAY_CHANGED = "com.autonavi.companion.MAIN_OVERLAY_CHANGED";
     static final String ACTION_OVERLAY_SCALE_CHANGED = "com.autonavi.companion.OVERLAY_SCALE_CHANGED";
     static final String ACTION_CLUSTER_MIRROR_CHANGED = "com.autonavi.companion.CLUSTER_MIRROR_CHANGED";
@@ -220,12 +225,15 @@ public class MainActivity extends Activity {
                     button("\u68c0\u67e5\u66f4\u65b0", v -> checkForUpdates(true), 0xFF059669));
             addButtonPair(parent,
                     button("\u6388\u6743ADB\u6743\u9650", v -> grantAdbPermission(), 0xFF0D9488),
+                    button("\u5c4f\u5e55\u6295\u5c4f\u6388\u6743", v -> requestScreenCapture(), 0xFF2563EB));
+            addButtonPair(parent,
                     button("\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", v -> refreshSecondaryDisplayInfo(), 0xFF475569));
             return;
         }
         parent.addView(button("\u9009\u62e9\u76ee\u6807\u5e94\u7528", v -> chooseTargetApp(), 0xFF2563EB));
         parent.addView(button("\u6388\u6743\u60ac\u6d6e\u7a97", v -> requestOverlayPermission(), 0xFF475569));
         parent.addView(button("\u6388\u6743ADB\u6743\u9650", v -> grantAdbPermission(), 0xFF0D9488));
+        parent.addView(button("屏幕投屏授权", v -> requestScreenCapture(), 0xFF2563EB));
         parent.addView(button("\u542f\u52a8\u60ac\u6d6e\u7a97", v -> enableMainOverlay(), 0xFF0F766E));
         parent.addView(button("\u5173\u95ed\u60ac\u6d6e\u7a97", v -> stopOverlayService(), 0xFFB45309));
         parent.addView(button(clusterMirrorButtonText(), v -> toggleClusterMirror((Button) v), 0xFF7C3AED));
@@ -1036,6 +1044,33 @@ public class MainActivity extends Activity {
     private void refreshSecondaryDisplayInfo() {
         updateSecondaryDisplayInfo();
         Toast.makeText(this, "\u5df2\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", Toast.LENGTH_SHORT).show();
+    }
+
+    private void requestScreenCapture() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            MediaProjectionManager projectionManager =
+                    (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+            if (projectionManager != null) {
+                Intent intent = projectionManager.createScreenCaptureIntent();
+                startActivityForResult(intent, REQUEST_CODE_SCREEN_CAPTURE);
+            }
+        } else {
+            Toast.makeText(this, "屏幕投屏需要Android 5.0及以上版本", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_SCREEN_CAPTURE) {
+            if (resultCode == RESULT_OK && data != null) {
+                ScreenCaptureService.setProjectionIntent(resultCode, data);
+                Toast.makeText(this, "屏幕投屏授权成功", Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "Screen capture permission granted, projection intent saved");
+            } else {
+                Toast.makeText(this, "投屏授权已取消", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void updateSecondaryDisplayInfo() {

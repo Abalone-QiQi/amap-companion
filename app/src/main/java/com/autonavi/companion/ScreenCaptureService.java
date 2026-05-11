@@ -17,6 +17,7 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.Display;
 import android.view.Surface;
+import android.widget.FrameLayout;
 
 public class ScreenCaptureService extends Service {
     private static final String TAG = "AmapCompanion";
@@ -25,10 +26,20 @@ public class ScreenCaptureService extends Service {
     private static final String EXTRA_RESULT_CODE = "result_code";
     private static final String EXTRA_RESULT_DATA = "result_data";
     private static final String EXTRA_DISPLAY_ID = "display_id";
+    private static final String EXTRA_CLUSTER_STAGE = "cluster_stage";
 
     public static final String ACTION_CAPTURE_STARTED = "com.autonavi.companion.CAPTURE_STARTED";
     public static final String ACTION_CAPTURE_STOPPED = "com.autonavi.companion.CAPTURE_STOPPED";
     public static final String ACTION_RESOLUTION_CHANGED = "com.autonavi.companion.RESOLUTION_CHANGED";
+    public static final String ACTION_START_IF_AUTHORIZED = "START_IF_AUTHORIZED";
+
+    private static Intent sProjectionResultData;
+    private static int sProjectionResultCode = -1;
+
+    public static void setProjectionIntent(int resultCode, Intent resultData) {
+        sProjectionResultCode = resultCode;
+        sProjectionResultData = resultData;
+    }
 
     private MediaProjectionManager projectionManager;
     private MediaProjection mediaProjection;
@@ -89,9 +100,21 @@ public class ScreenCaptureService extends Service {
         if (ACTION_CAPTURE_STARTED.equals(action)) {
             int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1);
             Intent resultData = intent.getParcelableExtra(EXTRA_RESULT_DATA);
-            int displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, -1);
-            clusterStage = (android.view.ViewGroup) intent.getParcelableExtra("cluster_stage");
-            startCapture(resultCode, resultData, displayId);
+            android.view.ViewGroup stage = (android.view.ViewGroup) intent.getParcelableExtra(EXTRA_CLUSTER_STAGE);
+            if (stage != null) {
+                clusterStage = stage;
+            }
+            startCapture(resultCode, resultData, -1);
+        } else if (ACTION_START_IF_AUTHORIZED.equals(action)) {
+            if (sProjectionResultCode > 0 && sProjectionResultData != null && !isCapturing()) {
+                int displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, -1);
+                startCapture(sProjectionResultCode, sProjectionResultData, displayId);
+                Log.d(TAG, "auto-started capture from stored projection intent");
+            } else if (isCapturing()) {
+                Log.d(TAG, "already capturing, skipping auto-start");
+            } else {
+                Log.w(TAG, "no stored projection intent available for auto-start");
+            }
         } else if (ACTION_CAPTURE_STOPPED.equals(action)) {
             stopCapture();
         } else if ("SET_SURFACE".equals(action)) {
