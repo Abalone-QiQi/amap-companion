@@ -128,6 +128,8 @@ public class OverlayService extends Service {
     private int navigationTurnDir = -1;
     private float overlayScale = 2f;
     private float clusterScale = 2f;
+    private LogMonitor logMonitor;
+    private boolean logMonitorTriggeredCapture;
     private final View.OnLayoutChangeListener clusterBoundsListener =
             (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> updateClusterPosition();
 
@@ -161,6 +163,7 @@ public class OverlayService extends Service {
         super.onCreate();
         startForeground(1, buildNotification());
         registerAmapReceivers();
+        initLogMonitor();
         ensureOverlay();
         ensureClusterMirror();
         stopSelfIfNoVisuals();
@@ -182,6 +185,7 @@ public class OverlayService extends Service {
         mainHandler.removeCallbacks(lanePoll);
         mainHandler.removeCallbacks(alertClear);
         dismissClusterMirror();
+        stopLogMonitor();
         try {
             unregisterReceiver(receiver);
         } catch (Throwable ignored) {
@@ -221,6 +225,96 @@ public class OverlayService extends Service {
             registerReceiver(receiver, filter);
         } catch (Throwable t) {
             Log.e(TAG, "register receiver failed", t);
+        }
+    }
+
+    private void initLogMonitor() {
+        try {
+            logMonitor = new LogMonitor();
+            String targetPackage = MainActivity.getTargetPackage(this);
+            if (targetPackage != null && !targetPackage.isEmpty()) {
+                logMonitor.addTargetPackage(targetPackage);
+            }
+            logMonitor.setCallback(new LogMonitor.LogCallback() {
+                @Override
+                public void onNavigationStateChanged(final LogMonitor.NavigationState newState, final String logLine) {
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            handleNavigationStateChange(newState, logLine);
+                        }
+                    });
+                }
+
+                @Override
+                public void onLogLine(final String logLine) {
+                    Log.d(TAG, "logMonitor: " + logLine);
+                }
+            });
+            if (AdbPermissionHelper.hasReadLogsPermission(this)) {
+                logMonitor.start();
+                Log.d(TAG, "LogMonitor started with READ_LOGS permission");
+            } else {
+                Log.d(TAG, "LogMonitor not started: READ_LOGS permission not granted");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "initLogMonitor failed", e);
+        }
+    }
+
+    private void stopLogMonitor() {
+        if (logMonitor != null) {
+            logMonitor.stop();
+            logMonitor = null;
+        }
+        if (logMonitorTriggeredCapture) {
+            stopScreenCapture();
+        }
+    }
+
+    private void handleNavigationStateChange(LogMonitor.NavigationState newState, String logLine) {
+        Log.d(TAG, "handleNavigationStateChange: " + newState + " from: " + logLine);
+        switch (newState) {
+            case NAVIGATING:
+                if (!MainActivity.isClusterMirrorEnabled(this)) {
+                    startScreenCapture();
+                    logMonitorTriggeredCapture = true;
+                }
+                break;
+            case IDLE:
+                if (logMonitorTriggeredCapture) {
+                    stopScreenCapture();
+                    logMonitorTriggeredCapture = false;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void startScreenCapture() {
+        try {
+            Intent intent = new Intent(this, ScreenCaptureService.class);
+            intent.setAction(ScreenCaptureService.ACTION_CAPTURE_STARTED);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+            Log.d(TAG, "ScreenCaptureService started via log monitor");
+        } catch (Exception e) {
+            Log.e(TAG, "startScreenCapture failed", e);
+        }
+    }
+
+    private void stopScreenCapture() {
+        try {
+            Intent intent = new Intent(this, ScreenCaptureService.class);
+            intent.setAction(ScreenCaptureService.ACTION_CAPTURE_STOPPED);
+            startService(intent);
+            Log.d(TAG, "ScreenCaptureService stopped via log monitor");
+        } catch (Exception e) {
+            Log.e(TAG, "stopScreenCapture failed", e);
         }
     }
 

@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     static final String KEY_BACKGROUND_OPACITY_PERCENT = "background_opacity_percent";
     static final String KEY_TEXT_MODE = "text_mode";
     static final String KEY_OVERLAY_UI_STYLE = "overlay_ui_style";
+    static final String KEY_AUTO_ADAPT_SCREEN = "auto_adapt_screen";
     static final String ACTION_MAIN_OVERLAY_CHANGED = "com.autonavi.companion.MAIN_OVERLAY_CHANGED";
     static final String ACTION_OVERLAY_SCALE_CHANGED = "com.autonavi.companion.OVERLAY_SCALE_CHANGED";
     static final String ACTION_CLUSTER_MIRROR_CHANGED = "com.autonavi.companion.CLUSTER_MIRROR_CHANGED";
@@ -92,6 +93,9 @@ public class MainActivity extends Activity {
     private TextView clusterScaleText;
     private TextView clusterDisplayText;
     private TextView overlayBackgroundOpacityText;
+    private TextView logMonitorStatusText;
+    private TextView secondaryDisplayInfoText;
+    private CheckBox autoAdaptScreenToggle;
     private FrameLayout overlayPreviewStage;
     private LinearLayout overlayPreviewPanel;
     private Button overlayTextModeButton;
@@ -210,16 +214,21 @@ public class MainActivity extends Activity {
             addButtonPair(parent,
                     button("\u9009\u62e9\u4e0b\u8f7d\u6e20\u9053", v -> chooseUpdateChannel(), 0xFF334155),
                     button("\u68c0\u67e5\u66f4\u65b0", v -> checkForUpdates(true), 0xFF059669));
+            addButtonPair(parent,
+                    button("\u6388\u6743ADB\u6743\u9650", v -> grantAdbPermission(), 0xFF0D9488),
+                    button("\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", v -> refreshSecondaryDisplayInfo(), 0xFF475569));
             return;
         }
         parent.addView(button("\u9009\u62e9\u76ee\u6807\u5e94\u7528", v -> chooseTargetApp(), 0xFF2563EB));
         parent.addView(button("\u6388\u6743\u60ac\u6d6e\u7a97", v -> requestOverlayPermission(), 0xFF475569));
+        parent.addView(button("\u6388\u6743ADB\u6743\u9650", v -> grantAdbPermission(), 0xFF0D9488));
         parent.addView(button("\u542f\u52a8\u60ac\u6d6e\u7a97", v -> enableMainOverlay(), 0xFF0F766E));
         parent.addView(button("\u5173\u95ed\u60ac\u6d6e\u7a97", v -> stopOverlayService(), 0xFFB45309));
         parent.addView(button(clusterMirrorButtonText(), v -> toggleClusterMirror((Button) v), 0xFF7C3AED));
         parent.addView(button("\u6253\u5f00\u76ee\u6807\u5e94\u7528", v -> openTargetApp(), 0xFF111827));
         parent.addView(button("\u9009\u62e9\u4e0b\u8f7d\u6e20\u9053", v -> chooseUpdateChannel(), 0xFF334155));
         parent.addView(button("\u68c0\u67e5\u66f4\u65b0", v -> checkForUpdates(true), 0xFF059669));
+        parent.addView(button("\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", v -> refreshSecondaryDisplayInfo(), 0xFF475569));
     }
 
     private void addOpenSourceSection(LinearLayout root, boolean compactTopMargin) {
@@ -321,13 +330,41 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT_BOLD);
         box.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
-        clusterDisplayText = new TextView(this);
-        clusterDisplayText.setTextSize(13f);
-        clusterDisplayText.setTextColor(0xFF334155);
+        secondaryDisplayInfoText = new TextView(this);
+        secondaryDisplayInfoText.setTextSize(13f);
+        secondaryDisplayInfoText.setTextColor(0xFF334155);
         LinearLayout.LayoutParams displayTextLp = new LinearLayout.LayoutParams(-1, -2);
         displayTextLp.setMargins(0, dp(8), 0, 0);
-        box.addView(clusterDisplayText, displayTextLp);
-        updateClusterDisplayText();
+        box.addView(secondaryDisplayInfoText, displayTextLp);
+        updateSecondaryDisplayInfo();
+
+        logMonitorStatusText = new TextView(this);
+        logMonitorStatusText.setTextSize(12f);
+        logMonitorStatusText.setTextColor(0xFF64748B);
+        LinearLayout.LayoutParams logStatusLp = new LinearLayout.LayoutParams(-1, -2);
+        logStatusLp.setMargins(0, dp(6), 0, 0);
+        box.addView(logMonitorStatusText, logStatusLp);
+        updateLogMonitorStatus();
+
+        autoAdaptScreenToggle = new CheckBox(this);
+        autoAdaptScreenToggle.setText("\u81ea\u52a8\u9002\u914d\u5c4f\u5e55");
+        autoAdaptScreenToggle.setChecked(isAutoAdaptScreenEnabled(this));
+        autoAdaptScreenToggle.setTextSize(13f);
+        autoAdaptScreenToggle.setTextColor(0xFF0F172A);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            autoAdaptScreenToggle.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF2563EB));
+        }
+        autoAdaptScreenToggle.setPadding(0, dp(4), 0, dp(2));
+        autoAdaptScreenToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                saveAutoAdaptScreenEnabled(isChecked);
+                Toast.makeText(MainActivity.this,
+                        isChecked ? "\u5df2\u5f00\u542f\u81ea\u52a8\u9002\u914d\u5c4f\u5e55" : "\u5df2\u5173\u95ed\u81ea\u52a8\u9002\u914d\u5c4f\u5e55",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+        box.addView(autoAdaptScreenToggle, new LinearLayout.LayoutParams(-1, -2));
 
         box.addView(button("\u9009\u62e9\u6295\u5c4f\u5c4f\u5e55", v -> chooseClusterDisplay(), 0xFF334155));
 
@@ -904,6 +941,79 @@ public class MainActivity extends Activity {
         Toast.makeText(this,
                 enabled ? "\u5df2\u5f00\u542f\u4eea\u8868\u76d8\u955c\u50cf" : "\u5df2\u5173\u95ed\u4eea\u8868\u76d8\u955c\u50cf",
                 Toast.LENGTH_SHORT).show();
+    }
+
+    private void grantAdbPermission() {
+        AdbPermissionHelper.grantReadLogsPermissionAsync(this, new AdbPermissionHelper.PermissionCallback() {
+            @Override
+            public void onResult(final boolean granted, final String message) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, message,
+                                granted ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG).show();
+                        updateLogMonitorStatus();
+                    }
+                });
+            }
+        });
+    }
+
+    private void refreshSecondaryDisplayInfo() {
+        updateSecondaryDisplayInfo();
+        Toast.makeText(this, "\u5df2\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateSecondaryDisplayInfo() {
+        if (secondaryDisplayInfoText == null) {
+            return;
+        }
+        DisplayManager manager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
+        if (manager == null) {
+            secondaryDisplayInfoText.setText("\u526f\u5c4f\u4fe1\u606f \u00b7 \u65e0\u6cd5\u83b7\u53d6DisplayManager");
+            return;
+        }
+        Display[] displays = manager.getDisplays();
+        int secondaryCount = 0;
+        StringBuilder sb = new StringBuilder("\u526f\u5c4f\u4fe1\u606f");
+        for (Display display : displays) {
+            if (display == null || display.getDisplayId() == Display.DEFAULT_DISPLAY) {
+                continue;
+            }
+            secondaryCount++;
+            android.graphics.Point size = new android.graphics.Point();
+            display.getRealSize(size);
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            sb.append(display.getName()).append(" (ID ").append(display.getDisplayId())
+              .append("): ").append(size.x).append("x").append(size.y);
+        }
+        if (secondaryCount == 0) {
+            sb.append("\n\u672a\u68c0\u6d4b\u5230\u526f\u5c4f");
+        }
+        secondaryDisplayInfoText.setText(sb.toString());
+    }
+
+    private void updateLogMonitorStatus() {
+        if (logMonitorStatusText == null) {
+            return;
+        }
+        boolean hasPermission = AdbPermissionHelper.hasReadLogsPermission(this);
+        String status = hasPermission ? "\u65e5\u5fd7\u76d1\u63a7 \u00b7 \u5df2\u6388\u6743" : "\u65e5\u5fd7\u76d1\u63a7 \u00b7 \u672a\u6388\u6743";
+        logMonitorStatusText.setText(status);
+    }
+
+    private void saveAutoAdaptScreenEnabled(boolean enabled) {
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_AUTO_ADAPT_SCREEN, enabled)
+                .apply();
+    }
+
+    static boolean isAutoAdaptScreenEnabled(android.content.Context context) {
+        return context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getBoolean(KEY_AUTO_ADAPT_SCREEN, true);
     }
 
     private void requestOverlayPermission() {
