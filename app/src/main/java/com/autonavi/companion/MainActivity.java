@@ -227,7 +227,8 @@ public class MainActivity extends Activity {
                     button("\u6388\u6743ADB\u6743\u9650", v -> grantAdbPermission(), 0xFF0D9488),
                     button("\u5c4f\u5e55\u6295\u5c4f\u6388\u6743", v -> requestScreenCapture(), 0xFF2563EB));
             addButtonPair(parent,
-                    button("\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", v -> refreshSecondaryDisplayInfo(), 0xFF475569));
+                    button("\u5237\u65b0\u526f\u5c4f\u4fe1\u606f", v -> refreshSecondaryDisplayInfo(), 0xFF475569),
+                    button("\u6253\u5f00\u76ee\u6807\u5e94\u7528", v -> openTargetApp(), 0xFF111827));
             return;
         }
         parent.addView(button("\u9009\u62e9\u76ee\u6807\u5e94\u7528", v -> chooseTargetApp(), 0xFF2563EB));
@@ -458,10 +459,11 @@ public class MainActivity extends Activity {
         String currentQuality = getScreenCaptureQuality(this);
         for (int i = 0; i < 4; i++) {
             final String qv = qualityValues[i];
-            Button qBtn = button(qualities[i], v -> {
+            final String qn = qualities[i];
+            Button qBtn = button(qn, v -> {
                 saveScreenCaptureQuality(this, qv);
                 notifyScreenCaptureQualityChanged(qv);
-                Toast.makeText(this, "\u6295\u5c4f\u8d28\u91cf: " + qualities[i], Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "投屏质量: " + qn, Toast.LENGTH_SHORT).show();
             }, qualityColors[i]);
             LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(0, dp(36), 1f);
             btnLp.setMargins(dp(3), 0, dp(3), 0);

@@ -34,7 +34,7 @@ fi
 ANDROID_JAR="$PLATFORM_DIR/android.jar"
 
 AAPT="$BUILD_TOOLS/aapt"
-D8="$BUILD_TOOLS/d8"
+D8="$ANDROID_HOME/cmdline-tools/latest-2/bin/d8"
 ZIPALIGN="$BUILD_TOOLS/zipalign"
 APKSIGNER="$BUILD_TOOLS/apksigner"
 
@@ -88,7 +88,7 @@ echo "$SOURCES" | tr ' ' '\n' | grep -v '^$' > "$SOURCES_FILE"
 echo "  Found $(wc -l < "$SOURCES_FILE") source files"
 
 echo "=> Compiling Java..."
-javac -encoding UTF-8 -source 8 -target 8 -classpath "$ANDROID_JAR" -d "$CLASSES_DIR" "@$SOURCES_FILE"
+javac -encoding UTF-8 --release 11 -classpath "$ANDROID_JAR" -d "$CLASSES_DIR" "@$SOURCES_FILE"
 
 echo "=> Converting to DEX..."
 CLASS_FILES=$(find "$CLASSES_DIR" -name '*.class' | tr '\n' ' ')

@@ -8,7 +8,7 @@ import android.content.Intent;
 import android.graphics.Point;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.MediaProjection;
+import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Handler;
@@ -23,6 +23,8 @@ public class ScreenCaptureService extends Service {
     private static final String TAG = "AmapCompanion";
     private static final String CHANNEL_ID = "amap_companion_capture";
     private static final int NOTIFICATION_ID = 2;
+    private static final int FLAG_AUTO_MIRROR = 1 << 1;
+    private static final int FLAG_OWN_CONTENT_ONLY = 1 << 3;
     private static final String EXTRA_RESULT_CODE = "result_code";
     private static final String EXTRA_RESULT_DATA = "result_data";
     private static final String EXTRA_DISPLAY_ID = "display_id";
@@ -343,8 +345,9 @@ public class ScreenCaptureService extends Service {
                     captureWidth,
                     captureHeight,
                     density,
-                    VirtualDisplay.FLAG_AUTO_MIRROR,
+                    FLAG_AUTO_MIRROR,
                     targetSurface,
+                    null,
                     null);
         } else {
             virtualDisplay = mediaProjection.createVirtualDisplay(
@@ -352,7 +355,8 @@ public class ScreenCaptureService extends Service {
                     captureWidth,
                     captureHeight,
                     density,
-                    VirtualDisplay.FLAG_AUTO_MIRROR | VirtualDisplay.FLAG_OWN_CONTENT_ONLY,
+                    FLAG_AUTO_MIRROR | FLAG_OWN_CONTENT_ONLY,
+                    null,
                     null,
                     null);
         }

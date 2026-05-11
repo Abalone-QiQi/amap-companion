@@ -1317,25 +1317,28 @@ public class OverlayService extends Service {
             return;
         }
         if ("com.autonavi.companion.SET_SCREEN_CAPTURE_QUALITY".equals(action)) {
-            String quality = extras != null ? extras.getString("quality") : null;
+            Bundle scExtras = intent.getExtras();
+            String quality = scExtras != null ? scExtras.getString("quality") : null;
             if (quality != null) {
-                sendScreenCaptureCommand("SET_QUALITY", intent -> intent.putExtra("quality", quality));
+                sendScreenCaptureCommand("SET_QUALITY", i -> i.putExtra("quality", quality));
                 MainActivity.saveScreenCaptureQuality(this, quality);
             }
             return;
         }
         if ("com.autonavi.companion.SET_SCREEN_CAPTURE_AUTO_ROTATE".equals(action)) {
-            boolean enabled = extras != null && extras.getBoolean("enabled", true);
-            sendScreenCaptureCommand("SET_AUTO_ROTATE", intent -> intent.putExtra("enabled", enabled));
+            Bundle scExtras2 = intent.getExtras();
+            boolean enabled = scExtras2 != null && scExtras2.getBoolean("enabled", true);
+            sendScreenCaptureCommand("SET_AUTO_ROTATE", i -> i.putExtra("enabled", enabled));
             return;
         }
         if ("com.autonavi.companion.SET_SCREEN_CAPTURE_POSITION".equals(action)) {
-            if (extras != null) {
-                int x = extras.getInt("x", 0);
-                int y = extras.getInt("y", 0);
-                sendScreenCaptureCommand("SET_POSITION", intent -> {
-                    intent.putExtra("x", x);
-                    intent.putExtra("y", y);
+            Bundle posExtras = intent.getExtras();
+            if (posExtras != null) {
+                int x = posExtras.getInt("x", 0);
+                int y = posExtras.getInt("y", 0);
+                sendScreenCaptureCommand("SET_POSITION", i -> {
+                    i.putExtra("x", x);
+                    i.putExtra("y", y);
                 });
                 Log.d(TAG, "Screen capture position updated: " + x + ", " + y);
             }
