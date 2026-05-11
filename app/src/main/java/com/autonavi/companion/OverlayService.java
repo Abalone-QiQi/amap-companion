@@ -221,6 +221,9 @@ public class OverlayService extends Service {
         filter.addAction(MainActivity.ACTION_CLUSTER_MIRROR_CHANGED);
         filter.addAction(MainActivity.ACTION_OVERLAY_CONTENT_CHANGED);
         filter.addAction(MainActivity.ACTION_OVERLAY_STYLE_CHANGED);
+        filter.addAction("com.autonavi.companion.SET_SCREEN_CAPTURE_QUALITY");
+        filter.addAction("com.autonavi.companion.SET_SCREEN_CAPTURE_AUTO_ROTATE");
+        filter.addAction("com.autonavi.companion.SET_SCREEN_CAPTURE_POSITION");
         try {
             registerReceiver(receiver, filter);
         } catch (Throwable t) {
@@ -315,6 +318,24 @@ public class OverlayService extends Service {
             Log.d(TAG, "ScreenCaptureService stopped via log monitor");
         } catch (Exception e) {
             Log.e(TAG, "stopScreenCapture failed", e);
+        }
+    }
+
+    private interface IntentModifier {
+        void modify(Intent intent);
+    }
+
+    private void sendScreenCaptureCommand(String action, IntentModifier modifier) {
+        try {
+            Intent intent = new Intent(this, ScreenCaptureService.class);
+            intent.setAction(action);
+            if (modifier != null) {
+                modifier.modify(intent);
+            }
+            startService(intent);
+            Log.d(TAG, "ScreenCaptureService command sent: " + action);
+        } catch (Exception e) {
+            Log.e(TAG, "sendScreenCaptureCommand failed: " + action, e);
         }
     }
 
@@ -1291,6 +1312,31 @@ public class OverlayService extends Service {
             dismissClusterMirror();
             ensureClusterMirror();
             applyContentVisibilityPrefs();
+            return;
+        }
+        if ("com.autonavi.companion.SET_SCREEN_CAPTURE_QUALITY".equals(action)) {
+            String quality = extras != null ? extras.getString("quality") : null;
+            if (quality != null) {
+                sendScreenCaptureCommand("SET_QUALITY", intent -> intent.putExtra("quality", quality));
+                MainActivity.saveScreenCaptureQuality(this, quality);
+            }
+            return;
+        }
+        if ("com.autonavi.companion.SET_SCREEN_CAPTURE_AUTO_ROTATE".equals(action)) {
+            boolean enabled = extras != null && extras.getBoolean("enabled", true);
+            sendScreenCaptureCommand("SET_AUTO_ROTATE", intent -> intent.putExtra("enabled", enabled));
+            return;
+        }
+        if ("com.autonavi.companion.SET_SCREEN_CAPTURE_POSITION".equals(action)) {
+            if (extras != null) {
+                int x = extras.getInt("x", 0);
+                int y = extras.getInt("y", 0);
+                sendScreenCaptureCommand("SET_POSITION", intent -> {
+                    intent.putExtra("x", x);
+                    intent.putExtra("y", y);
+                });
+                Log.d(TAG, "Screen capture position updated: " + x + ", " + y);
+            }
             return;
         }
         if (MainActivity.ACTION_OVERLAY_CONTENT_CHANGED.equals(action)) {

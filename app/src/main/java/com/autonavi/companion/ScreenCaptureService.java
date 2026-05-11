@@ -34,6 +34,7 @@ public class ScreenCaptureService extends Service {
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private Surface targetSurface;
+    private android.view.ViewGroup clusterStage;
 
     private int secondaryDisplayId = -1;
     private int secondaryWidth = 0;
@@ -48,6 +49,11 @@ public class ScreenCaptureService extends Service {
     private boolean isAutoAdaptEnabled = true;
     private int manualWidth = 0;
     private int manualHeight = 0;
+
+    private int captureQualityDpi = 320;
+    private boolean autoRotateEnabled = true;
+    private boolean isSecondaryPortrait = false;
+    private boolean isMainPortrait = false;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -84,6 +90,7 @@ public class ScreenCaptureService extends Service {
             int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, -1);
             Intent resultData = intent.getParcelableExtra(EXTRA_RESULT_DATA);
             int displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, -1);
+            clusterStage = (android.view.ViewGroup) intent.getParcelableExtra("cluster_stage");
             startCapture(resultCode, resultData, displayId);
         } else if (ACTION_CAPTURE_STOPPED.equals(action)) {
             stopCapture();
@@ -99,6 +106,17 @@ public class ScreenCaptureService extends Service {
             if (virtualDisplay != null) {
                 resizeVirtualDisplay();
             }
+        } else if ("SET_QUALITY".equals(action)) {
+            String quality = intent.getStringExtra("quality");
+            if (quality != null) {
+                setQuality(quality);
+            }
+        } else if ("SET_AUTO_ROTATE".equals(action)) {
+            setAutoRotateEnabled(intent.getBooleanExtra("enabled", true));
+        } else if ("SET_POSITION".equals(action)) {
+            int x = intent.getIntExtra("x", 0);
+            int y = intent.getIntExtra("y", 0);
+            setCapturePosition(x, y);
         }
 
         return START_STICKY;
@@ -148,7 +166,9 @@ public class ScreenCaptureService extends Service {
             secondaryDisplayId = display.getDisplayId();
             secondaryWidth = size.x;
             secondaryHeight = size.y;
-            Log.d(TAG, "secondary display " + secondaryDisplayId + ": " + secondaryWidth + "x" + secondaryHeight);
+            isSecondaryPortrait = secondaryHeight > secondaryWidth;
+            Log.d(TAG, "secondary display " + secondaryDisplayId + ": " + secondaryWidth + "x" + secondaryHeight + 
+                    (isSecondaryPortrait ? " (portrait)" : " (landscape)"));
 
             if (isAutoAdaptEnabled) {
                 calculateCaptureSize();
@@ -166,6 +186,7 @@ public class ScreenCaptureService extends Service {
             mainDisplay.getRealSize(size);
             mainWidth = size.x;
             mainHeight = size.y;
+            isMainPortrait = mainHeight > mainWidth;
             aspectRatio = mainWidth > 0 ? (float) mainWidth / mainHeight : aspectRatio;
         }
     }
@@ -204,6 +225,13 @@ public class ScreenCaptureService extends Service {
 
         float mainRatio = mainWidth > 0 ? (float) mainWidth / mainHeight : aspectRatio;
         float secondaryRatio = (float) secondaryWidth / secondaryHeight;
+
+        if (autoRotateEnabled) {
+            if ((isMainPortrait && !isSecondaryPortrait) || (!isMainPortrait && isSecondaryPortrait)) {
+                mainRatio = 1.0f / mainRatio;
+                Log.d(TAG, "rotation compensation applied, adjusted ratio=" + mainRatio);
+            }
+        }
 
         if (Math.abs(secondaryRatio - mainRatio) < 0.05f) {
             captureWidth = secondaryWidth;
@@ -284,7 +312,7 @@ public class ScreenCaptureService extends Service {
             return;
         }
 
-        int density = getResources().getDisplayMetrics().densityDpi;
+        int density = captureQualityDpi;
 
         if (targetSurface != null && targetSurface.isValid()) {
             virtualDisplay = mediaProjection.createVirtualDisplay(
@@ -306,7 +334,7 @@ public class ScreenCaptureService extends Service {
                     null);
         }
 
-        Log.d(TAG, "virtualDisplay created: " + captureWidth + "x" + captureHeight);
+        Log.d(TAG, "virtualDisplay created: " + captureWidth + "x" + captureHeight + " @ " + density + "dpi");
     }
 
     private void resizeVirtualDisplay() {
@@ -326,11 +354,11 @@ public class ScreenCaptureService extends Service {
             return;
         }
 
-        int density = getResources().getDisplayMetrics().densityDpi;
+        int density = captureQualityDpi;
 
         try {
             virtualDisplay.resize(captureWidth, captureHeight, density);
-            Log.d(TAG, "virtualDisplay resized to: " + captureWidth + "x" + captureHeight);
+            Log.d(TAG, "virtualDisplay resized to: " + captureWidth + "x" + captureHeight + " @ " + density + "dpi");
             notifyCallbackResolutionChanged();
         } catch (Exception e) {
             Log.e(TAG, "resizeVirtualDisplay error", e);
@@ -408,6 +436,62 @@ public class ScreenCaptureService extends Service {
 
     public float getAspectRatio() {
         return aspectRatio;
+    }
+
+    public void setQuality(String quality) {
+        switch (quality) {
+            case "low":
+                captureQualityDpi = 160;
+                break;
+            case "medium":
+                captureQualityDpi = 240;
+                break;
+            case "high":
+                captureQualityDpi = 320;
+                break;
+            case "ultra":
+                captureQualityDpi = 480;
+                break;
+            default:
+                captureQualityDpi = 320;
+                break;
+        }
+        Log.d(TAG, "quality set to: " + quality + " (" + captureQualityDpi + "dpi)");
+        if (virtualDisplay != null) {
+            resizeVirtualDisplay();
+        }
+    }
+
+    public void setAutoRotateEnabled(boolean enabled) {
+        this.autoRotateEnabled = enabled;
+        if (virtualDisplay != null && isAutoAdaptEnabled) {
+            resizeVirtualDisplay();
+        }
+        Log.d(TAG, "auto rotate enabled: " + enabled);
+    }
+
+    public boolean isAutoRotateEnabled() {
+        return autoRotateEnabled;
+    }
+
+    public int getCaptureQualityDpi() {
+        return captureQualityDpi;
+    }
+
+    public void setCapturePosition(int x, int y) {
+        if (clusterStage != null) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) clusterStage.getLayoutParams();
+                    if (params != null) {
+                        params.leftMargin = x;
+                        params.topMargin = y;
+                        clusterStage.setLayoutParams(params);
+                    }
+                }
+            });
+        }
     }
 
     private void notifyCallbackStarted(final int width, final int height) {

@@ -15,10 +15,76 @@ public class LogMonitor {
 
     private static final String AMAP_PACKAGE = "com.autonavi.amap";
 
-    private static final Pattern NAV_START_PATTERN = Pattern.compile(
-            "(?i)(start.*navi|navi.*start|begin.*navigation|navigation.*begin|进入导航|开启导航)");
-    private static final Pattern NAV_END_PATTERN = Pattern.compile(
-            "(?i)(end.*navi|navi.*end|exit.*navigation|navigation.*exit|退出导航|导航.*结束|导航.*退出|结束导航)");
+    private static final String[] NAV_START_KEYWORDS = {
+            "(?i)start.*navi",
+            "(?i)navi.*start",
+            "(?i)begin.*navigation",
+            "(?i)navigation.*begin",
+            "(?i)enter.*navigation",
+            "(?i)navi.*guide.*start",
+            "(?i)route.*guide.*start",
+            "(?i)GPS.*navigation.*start",
+            "进入导航",
+            "开启导航",
+            "开始导航",
+            "启动导航",
+            "进入路线引导",
+            "导航开始",
+            "开始路线",
+            "进入.*导航模式",
+            "NAV.*STATE.*START",
+            "NAVI_STATE.*NAVIGATING",
+            "AMapNavi.*start",
+            "NaviManager.*startNavi",
+            "GuideManager.*startGuide"
+    };
+
+    private static final String[] NAV_END_KEYWORDS = {
+            "(?i)end.*navi",
+            "(?i)navi.*end",
+            "(?i)exit.*navigation",
+            "(?i)navigation.*exit",
+            "(?i)stop.*navigation",
+            "(?i)navi.*guide.*stop",
+            "(?i)route.*guide.*end",
+            "(?i)GPS.*navigation.*stop",
+            "退出导航",
+            "导航结束",
+            "导航退出",
+            "结束导航",
+            "停止导航",
+            "关闭导航",
+            "退出.*导航模式",
+            "导航已退出",
+            "路线引导结束",
+            "导航完成",
+            "NAV.*STATE.*END",
+            "NAVI_STATE.*IDLE",
+            "AMapNavi.*stop",
+            "NaviManager.*stopNavi",
+            "GuideManager.*stopGuide",
+            "导航已关闭"
+    };
+
+    private static final Pattern[] NAV_START_PATTERNS = compilePatterns(NAV_START_KEYWORDS);
+    private static final Pattern[] NAV_END_PATTERNS = compilePatterns(NAV_END_KEYWORDS);
+
+    private static Pattern[] compilePatterns(String[] keywords) {
+        Pattern[] patterns = new Pattern[keywords.length];
+        for (int i = 0; i < keywords.length; i++) {
+            patterns[i] = Pattern.compile(keywords[i]);
+        }
+        return patterns;
+    }
+
+    private static boolean matchesAny(Pattern[] patterns, String text) {
+        for (Pattern pattern : patterns) {
+            if (pattern.matcher(text).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public enum NavigationState {
         UNKNOWN,
@@ -161,7 +227,7 @@ public class LogMonitor {
             });
         }
 
-        if (NAV_START_PATTERN.matcher(line).find()) {
+        if (matchesAny(NAV_START_PATTERNS, line)) {
             if (currentState != NavigationState.NAVIGATING) {
                 currentState = NavigationState.NAVIGATING;
                 Log.d(TAG, "Navigation started detected");
@@ -176,7 +242,7 @@ public class LogMonitor {
                     });
                 }
             }
-        } else if (NAV_END_PATTERN.matcher(line).find()) {
+        } else if (matchesAny(NAV_END_PATTERNS, line)) {
             if (currentState != NavigationState.IDLE) {
                 currentState = NavigationState.IDLE;
                 Log.d(TAG, "Navigation ended detected");

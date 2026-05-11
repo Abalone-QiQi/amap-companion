@@ -61,6 +61,10 @@ public class MainActivity extends Activity {
     static final String KEY_TEXT_MODE = "text_mode";
     static final String KEY_OVERLAY_UI_STYLE = "overlay_ui_style";
     static final String KEY_AUTO_ADAPT_SCREEN = "auto_adapt_screen";
+    static final String KEY_SCREEN_CAPTURE_X = "screen_capture_x";
+    static final String KEY_SCREEN_CAPTURE_Y = "screen_capture_y";
+    static final String KEY_SCREEN_CAPTURE_SCALE = "screen_capture_scale";
+    static final String KEY_SCREEN_CAPTURE_QUALITY = "screen_capture_quality";
     static final String ACTION_MAIN_OVERLAY_CHANGED = "com.autonavi.companion.MAIN_OVERLAY_CHANGED";
     static final String ACTION_OVERLAY_SCALE_CHANGED = "com.autonavi.companion.OVERLAY_SCALE_CHANGED";
     static final String ACTION_CLUSTER_MIRROR_CHANGED = "com.autonavi.companion.CLUSTER_MIRROR_CHANGED";
@@ -420,9 +424,79 @@ public class MainActivity extends Activity {
         downRow.addView(directionButton("\u4e0b", v -> moveClusterBy(0, dp(16))));
         box.addView(downRow, new LinearLayout.LayoutParams(-1, -2));
 
+        addScreenCaptureSettings(box);
+
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.setMargins(0, dp(8), 0, 0);
         parent.addView(box, lp);
+    }
+
+    private void addScreenCaptureSettings(LinearLayout parent) {
+        TextView qualityTitle = new TextView(this);
+        qualityTitle.setText("\u6295\u5c4f\u753b\u8d28");
+        qualityTitle.setTextSize(14f);
+        qualityTitle.setTextColor(0xFF111827);
+        qualityTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
+        titleLp.setMargins(0, dp(12), 0, dp(6));
+        parent.addView(qualityTitle, titleLp);
+
+        LinearLayout qualityRow = new LinearLayout(this);
+        qualityRow.setOrientation(LinearLayout.HORIZONTAL);
+        qualityRow.setWeightSum(4f);
+        String[] qualities = {"\u4f4e", "\u4e2d", "\u9ad8", "\u8d85\u9ad8"};
+        String[] qualityValues = {"low", "medium", "high", "ultra"};
+        int[] qualityColors = {0xFF6B7280, 0xFF3B82F6, 0xFF059669, 0xFF7C3AED};
+        String currentQuality = getScreenCaptureQuality(this);
+        for (int i = 0; i < 4; i++) {
+            final String qv = qualityValues[i];
+            Button qBtn = button(qualities[i], v -> {
+                saveScreenCaptureQuality(this, qv);
+                notifyScreenCaptureQualityChanged(qv);
+                Toast.makeText(this, "\u6295\u5c4f\u8d28\u91cf: " + qualities[i], Toast.LENGTH_SHORT).show();
+            }, qualityColors[i]);
+            LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(0, dp(36), 1f);
+            btnLp.setMargins(dp(3), 0, dp(3), 0);
+            qBtn.setLayoutParams(btnLp);
+            qBtn.setTextSize(12f);
+            if (qv.equals(currentQuality)) {
+                qBtn.setAlpha(1.0f);
+            } else {
+                qBtn.setAlpha(0.5f);
+            }
+            qualityRow.addView(qBtn);
+        }
+        parent.addView(qualityRow);
+
+        CheckBox autoRotateToggle = new CheckBox(this);
+        autoRotateToggle.setText("\u81ea\u52a8\u65cb\u8f6c\u9002\u914d\uff08\u6a2a\u7ad6\u5c4f\uff09");
+        autoRotateToggle.setChecked(true);
+        autoRotateToggle.setTextSize(13f);
+        autoRotateToggle.setTextColor(0xFF0F172A);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            autoRotateToggle.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFF2563EB));
+        }
+        autoRotateToggle.setPadding(0, dp(4), 0, dp(2));
+        autoRotateToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                notifyScreenCaptureAutoRotateChanged(isChecked);
+                Toast.makeText(MainActivity.this,
+                        isChecked ? "\u5df2\u5f00\u542f\u81ea\u52a8\u65cb\u8f6c\u9002\u914d" : "\u5df2\u5173\u95ed\u81ea\u52a8\u65cb\u8f6c\u9002\u914d",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+        LinearLayout.LayoutParams rotateLp = new LinearLayout.LayoutParams(-1, -2);
+        rotateLp.setMargins(0, dp(8), 0, 0);
+        parent.addView(autoRotateToggle, rotateLp);
+
+        TextView captureHint = new TextView(this);
+        captureHint.setText("\u6295\u5c4f\u4f4d\u7f6e\u548c\u5927\u5c0f\u4f1a\u81ea\u52a8\u4fdd\u5b58\uff0c\u4e0b\u6b21\u542f\u52a8\u65f6\u81ea\u52a8\u6062\u590d");
+        captureHint.setTextSize(11f);
+        captureHint.setTextColor(0xFF94A3B8);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(-1, -2);
+        hintLp.setMargins(0, dp(8), 0, 0);
+        parent.addView(captureHint, hintLp);
     }
 
     private void addOverlayContentControls(LinearLayout parent) {
@@ -1016,6 +1090,54 @@ public class MainActivity extends Activity {
                 .getBoolean(KEY_AUTO_ADAPT_SCREEN, true);
     }
 
+    static int getScreenCaptureX(android.content.Context context) {
+        return context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getInt(KEY_SCREEN_CAPTURE_X, 0);
+    }
+
+    static void saveScreenCaptureX(android.content.Context context, int x) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_SCREEN_CAPTURE_X, x)
+                .apply();
+    }
+
+    static int getScreenCaptureY(android.content.Context context) {
+        return context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getInt(KEY_SCREEN_CAPTURE_Y, 0);
+    }
+
+    static void saveScreenCaptureY(android.content.Context context, int y) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_SCREEN_CAPTURE_Y, y)
+                .apply();
+    }
+
+    static float getScreenCaptureScale(android.content.Context context) {
+        return context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getFloat(KEY_SCREEN_CAPTURE_SCALE, 1.0f);
+    }
+
+    static void saveScreenCaptureScale(android.content.Context context, float scale) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putFloat(KEY_SCREEN_CAPTURE_SCALE, scale)
+                .apply();
+    }
+
+    static String getScreenCaptureQuality(android.content.Context context) {
+        return context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(KEY_SCREEN_CAPTURE_QUALITY, "high");
+    }
+
+    static void saveScreenCaptureQuality(android.content.Context context, String quality) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(KEY_SCREEN_CAPTURE_QUALITY, quality)
+                .apply();
+    }
+
     private void requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
@@ -1461,6 +1583,34 @@ public class MainActivity extends Activity {
         sendBroadcast(intent);
     }
 
+    private void notifyScreenCaptureQualityChanged(String quality) {
+        try {
+            Intent intent = new Intent("com.autonavi.companion.SET_SCREEN_CAPTURE_QUALITY");
+            intent.setPackage(getPackageName());
+            intent.putExtra("quality", quality);
+            sendBroadcast(intent);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void notifyScreenCaptureAutoRotateChanged(boolean enabled) {
+        try {
+            Intent intent = new Intent("com.autonavi.companion.SET_SCREEN_CAPTURE_AUTO_ROTATE");
+            intent.setPackage(getPackageName());
+            intent.putExtra("enabled", enabled);
+            sendBroadcast(intent);
+        } catch (Exception ignored) {
+        }
+    }
+
+    static void saveScreenCapturePosition(android.content.Context context, int x, int y) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putInt(KEY_SCREEN_CAPTURE_X, x)
+                .putInt(KEY_SCREEN_CAPTURE_Y, y)
+                .apply();
+    }
+
     private void stopServiceIfNoVisuals() {
         if (!isMainOverlayEnabled(this) && !isClusterMirrorEnabled(this)) {
             stopService(new Intent(this, OverlayService.class));
@@ -1539,9 +1689,23 @@ public class MainActivity extends Activity {
         prefs.edit()
                 .putInt(KEY_CLUSTER_X, x)
                 .putInt(KEY_CLUSTER_Y, y)
+                .putInt(KEY_SCREEN_CAPTURE_X, x)
+                .putInt(KEY_SCREEN_CAPTURE_Y, y)
                 .apply();
         startOverlayService();
         notifyClusterMirrorChanged();
+        sendScreenCapturePositionCommand(x, y);
+    }
+
+    private void sendScreenCapturePositionCommand(int x, int y) {
+        try {
+            Intent intent = new Intent(this, OverlayService.class);
+            intent.setAction("com.autonavi.companion.SET_SCREEN_CAPTURE_POSITION");
+            intent.putExtra("x", x);
+            intent.putExtra("y", y);
+            startService(intent);
+        } catch (Exception ignored) {
+        }
     }
 
     static int getOverlayScalePercent(android.content.Context context) {
